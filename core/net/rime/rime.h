@@ -67,6 +67,7 @@
 #include "net/rime/runicast.h"
 #include "net/rime/timesynch.h"
 #include "net/rime/trickle.h"
+#include "net/rime/bunicast.h"
 #include "net/rime/channel-scan.h"
 #include "net/rime/priority-list.h"
 

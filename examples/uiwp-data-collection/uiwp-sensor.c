@@ -122,6 +122,7 @@ sent_buc(struct bunicast_conn *c, int status)
     else 
         bunicast_send(c, &addr, buf);
 #else
+    // more data to be sent write in here
     channel_switch(COMMAND_CHANNEL);
 #endif
 }
