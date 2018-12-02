@@ -38,6 +38,8 @@
  *         Niclas Finne <nfi@sics.se>
  */
 
+// Modified by Yuan Qin <yuan.qin14@imperial.ac.uk.
+
 #include "net/mac/mac-sequence.h"
 #include "net/mac/nullrdc.h"
 #include "net/packetbuf.h"
@@ -69,7 +71,7 @@
 #ifdef NULLRDC_CONF_802154_AUTOACK
 #define NULLRDC_802154_AUTOACK NULLRDC_CONF_802154_AUTOACK
 #else
-#define NULLRDC_802154_AUTOACK 0
+#define NULLRDC_802154_AUTOACK 1
 #endif /* NULLRDC_CONF_802154_AUTOACK */
 #endif /* NULLRDC_802154_AUTOACK */
 
@@ -109,135 +111,110 @@
 
 #define ACK_LEN 3
 
+#define CCA_CHECK_TIME                     RTIMER_ARCH_SECOND / 8192
+#define CCA_SLEEP_TIME                     (RTIMER_ARCH_SECOND / 2000) + 1
+#define CHECK_TIME                         (2 * (CCA_CHECK_TIME + CCA_SLEEP_TIME))
+#define CYCLE_TIME (RTIMER_ARCH_SECOND / NETSTACK_RDC_CHANNEL_CHECK_RATE)
+
+#define STROBE_TIME                        (CYCLE_TIME + 2 * CHECK_TIME)
+
 /*---------------------------------------------------------------------------*/
 static int
-send_one_packet(mac_callback_t sent, void *ptr)
+send_packet(mac_callback_t sent, void *ptr)
 {
   int ret;
+  int strobes = 0;
+  uint8_t got_strobe_ack = 0;
+  rtimer_clock_t t0;
+  int len = 0;
+  uint8_t seqno = 255;
+  uint8_t collisions;
   int last_sent_ok = 0;
 
+
   packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &linkaddr_node_addr);
-#if NULLRDC_802154_AUTOACK || NULLRDC_802154_AUTOACK_HW
   packetbuf_set_attr(PACKETBUF_ATTR_MAC_ACK, 1);
-#endif /* NULLRDC_802154_AUTOACK || NULLRDC_802154_AUTOACK_HW */
 
   if(NETSTACK_FRAMER.create() < 0) {
     /* Failed to allocate space for headers */
     PRINTF("nullrdc: send failed, too large header\n");
     ret = MAC_TX_ERR_FATAL;
-  } else {
-#if NULLRDC_802154_AUTOACK
+  } else{
     int is_broadcast;
-    uint8_t dsn;
-    dsn = ((uint8_t *)packetbuf_hdrptr())[2] & 0xff;
 
     NETSTACK_RADIO.prepare(packetbuf_hdrptr(), packetbuf_totlen());
 
     is_broadcast = packetbuf_holds_broadcast();
 
     if(NETSTACK_RADIO.receiving_packet() ||
-       (!is_broadcast && NETSTACK_RADIO.pending_packet())) {
+      (!is_broadcast && NETSTACK_RADIO.pending_packet())) {
 
-      /* Currently receiving a packet over air or the radio has
-         already received a packet that needs to be read before
-         sending with auto ack. */
+        /* Currently receiving a packet over air or the radio has
+          already received a packet that needs to be read before
+          sending with auto ack. */
       ret = MAC_TX_COLLISION;
     } else {
+
       if(!is_broadcast) {
         RIMESTATS_ADD(reliabletx);
-      }
+        seqno = packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO);
+        }
 
-      switch(NETSTACK_RADIO.transmit(packetbuf_totlen())) {
-      case RADIO_TX_OK:
-        if(is_broadcast) {
-          ret = MAC_TX_OK;
-        } else {
-          rtimer_clock_t wt;
+      watchdog_periodic();
+      t0 = RTIMER_NOW();
 
-          /* Check for ack */
+      for(strobes = 0, collisions = 0; 
+        got_strobe_ack == 0 && collisions == 0 &&
+        RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + STROBE_TIME);
+        strobes++) 
+      {
+            
+        watchdog_periodic();
+
+        rtimer_clock_t wt;
+        NETSTACK_RADIO.transmit(packetbuf_totlen());
+
+        wt = RTIMER_NOW();
+        while(RTIMER_CLOCK_LT(RTIMER_NOW(), wt + ACK_WAIT_TIME)) {}
+
+        if(!is_broadcast && (NETSTACK_RADIO.receiving_packet() ||
+                            NETSTACK_RADIO.pending_packet() ||
+                            NETSTACK_RADIO.channel_clear() == 0)) {
+          uint8_t ackbuf[ACK_LEN];
           wt = RTIMER_NOW();
-          watchdog_periodic();
-          while(RTIMER_CLOCK_LT(RTIMER_NOW(), wt + ACK_WAIT_TIME)) {
-#if CONTIKI_TARGET_COOJA || CONTIKI_TARGET_COOJA_IP64
-            simProcessRunValue = 1;
-            cooja_mt_yield();
-#endif /* CONTIKI_TARGET_COOJA || CONTIKI_TARGET_COOJA_IP64 */
-          }
+          while(RTIMER_CLOCK_LT(RTIMER_NOW(), wt + AFTER_ACK_DETECTED_WAIT_TIME)) {}
 
-          ret = MAC_TX_NOACK;
-          if(NETSTACK_RADIO.receiving_packet() ||
-             NETSTACK_RADIO.pending_packet() ||
-             NETSTACK_RADIO.channel_clear() == 0) {
-            int len;
-            uint8_t ackbuf[ACK_LEN];
-
-            if(AFTER_ACK_DETECTED_WAIT_TIME > 0) {
-              wt = RTIMER_NOW();
-              watchdog_periodic();
-              while(RTIMER_CLOCK_LT(RTIMER_NOW(),
-                                    wt + AFTER_ACK_DETECTED_WAIT_TIME)) {
-#if CONTIKI_TARGET_COOJA || CONTIKI_TARGET_COOJA_IP64
-                simProcessRunValue = 1;
-                cooja_mt_yield();
-#endif /* CONTIKI_TARGET_COOJA || CONTIKI_TARGET_COOJA_IP64 */
-              }
-            }
-
-            if(NETSTACK_RADIO.pending_packet()) {
-              len = NETSTACK_RADIO.read(ackbuf, ACK_LEN);
-              if(len == ACK_LEN && ackbuf[2] == dsn) {
-                /* Ack received */
-                RIMESTATS_ADD(ackrx);
-                ret = MAC_TX_OK;
-              } else {
-                /* Not an ack or ack not for us: collision */
-                ret = MAC_TX_COLLISION;
-              }
-            }
+          len = NETSTACK_RADIO.read(ackbuf, ACK_LEN);
+          if(len == ACK_LEN && seqno == ackbuf[ACK_LEN - 1]) {
+            got_strobe_ack = 1;
+            ret = MAC_TX_OK;
           } else {
-            PRINTF("nullrdc tx noack\n");
+            collisions++;
+            ret = MAC_TX_COLLISION;
           }
         }
-        break;
-      case RADIO_TX_COLLISION:
-        ret = MAC_TX_COLLISION;
-        break;
-      default:
-        ret = MAC_TX_ERR;
-        break;
       }
+
+      if(!is_broadcast && !got_strobe_ack && collisions == 0)
+        ret = MAC_TX_NOACK;
+
+      if(is_broadcast)
+        ret = MAC_TX_OK;
     }
-
-#else /* ! NULLRDC_802154_AUTOACK */
-
-    switch(NETSTACK_RADIO.send(packetbuf_hdrptr(), packetbuf_totlen())) {
-    case RADIO_TX_OK:
-      ret = MAC_TX_OK;
-      break;
-    case RADIO_TX_COLLISION:
-      ret = MAC_TX_COLLISION;
-      break;
-    case RADIO_TX_NOACK:
-      ret = MAC_TX_NOACK;
-      break;
-    default:
-      ret = MAC_TX_ERR;
-      break;
-    }
-
-#endif /* ! NULLRDC_802154_AUTOACK */
   }
+
   if(ret == MAC_TX_OK) {
     last_sent_ok = 1;
   }
+
   mac_call_sent_callback(sent, ptr, ret, 1);
   return last_sent_ok;
 }
 /*---------------------------------------------------------------------------*/
 static void
-send_packet(mac_callback_t sent, void *ptr)
+nullrdc_send_packet(mac_callback_t sent, void *ptr)
 {
-  send_one_packet(sent, ptr);
+  send_packet(sent, ptr);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -250,7 +227,7 @@ send_list(mac_callback_t sent, void *ptr, struct rdc_buf_list *buf_list)
     int last_sent_ok;
 
     queuebuf_to_packetbuf(buf_list->buf);
-    last_sent_ok = send_one_packet(sent, ptr);
+    last_sent_ok = send_packet(sent, ptr);
 
     /* If packet transmission was not successful, we should back off and let
      * upper layers retransmit, rather than potentially sending out-of-order
@@ -290,8 +267,8 @@ packet_input(void)
   } else {
     int duplicate = 0;
 
-#if NULLRDC_802154_AUTOACK || NULLRDC_802154_AUTOACK_HW
-#if RDC_WITH_DUPLICATE_DETECTION
+// #if NULLRDC_802154_AUTOACK || NULLRDC_802154_AUTOACK_HW
+// #if RDC_WITH_DUPLICATE_DETECTION
     /* Check for duplicate packet. */
     duplicate = mac_sequence_is_duplicate();
     if(duplicate) {
@@ -299,10 +276,11 @@ packet_input(void)
       PRINTF("nullrdc: drop duplicate link layer packet %u\n",
              packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO));
     } else {
+      PRINTF("nullrdc: non duplicated packets detected\n");
       mac_sequence_register_seqno();
     }
-#endif /* RDC_WITH_DUPLICATE_DETECTION */
-#endif /* NULLRDC_802154_AUTOACK */
+// #endif /* RDC_WITH_DUPLICATE_DETECTION */
+// #endif /* NULLRDC_802154_AUTOACK */
 
 #if NULLRDC_SEND_802154_ACK
     {
@@ -322,6 +300,7 @@ packet_input(void)
     }
 #endif /* NULLRDC_SEND_ACK */
     if(!duplicate) {
+      PRINTF("nullrdc: pass packets to mac layer\n");
       NETSTACK_MAC.input();
     }
   }
@@ -358,7 +337,7 @@ init(void)
 const struct rdc_driver nullrdc_driver = {
   "nullrdc",
   init,
-  send_packet,
+  nullrdc_send_packet,
   send_list,
   packet_input,
   on,
