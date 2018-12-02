@@ -57,6 +57,8 @@
 #include "net/queuebuf.h"
 #include "net/linkaddr.h"
 #include "net/packetbuf.h"
+#include "net/uiwp-ack.h"
+#include "net/uiwp-request.h"
 #include "net/rime/rimestats.h"
 #include "net/rime/rmh.h"
 #include "net/rime/route-discovery.h"
@@ -65,6 +67,8 @@
 #include "net/rime/runicast.h"
 #include "net/rime/timesynch.h"
 #include "net/rime/trickle.h"
+#include "net/rime/channel-scan.h"
+#include "net/rime/priority-list.h"
 
 #include "net/mac/mac.h"
 /**
