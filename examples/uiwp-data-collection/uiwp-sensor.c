@@ -72,7 +72,7 @@ recv_uc(struct unicast_conn *c, const linkaddr_t *from)
     if (channel_switch(uiwprequestlist.channel) == CHANNEL_SWITCH_OK) {
         PRINTF("bunicast send to sink, channel: %d\n", uiwprequestlist.channel);
 
-        // char *buf = "hello world\n";
+        char *buf = "This buf has the sensor data\n";
         bunicast_size(&buc, 1);
         bunicast_send(&buc, from, buf);
 
@@ -145,11 +145,6 @@ PROCESS_THREAD(sensor_process, ev, data)
     com_init();
 
     static struct etimer et;
-
-    int i;
-    for (i = 0; i < DATA_SIZE; i++) {
-        buf[i] = 'a';
-    }
 
     while(1) {
         etimer_set(&et, CLOCK_SECOND * 40);
