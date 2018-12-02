@@ -63,7 +63,7 @@ channel_scan(void)
 	int channel_rssi[num_of_channel];
 	for (ch = 0; ch< num_of_channel; ch++)
 	{
-		if (channel_hop(ch + channel_min) == CHANNEL_HOP_ERROR)
+		if (channel_switch(ch + channel_min) == CHANNEL_SWITCH_ERROR)
 			return CHANNEL_SCAN_ERROR;
 
 		if (NETSTACK_RADIO.get_value(RADIO_PARAM_RSSI, &(channel_rssi[ch]))) {
@@ -74,7 +74,7 @@ channel_scan(void)
 	}
 
 	// return to offset channel
-	if (channel_hop(CHANNEL_OFFSET) == CHANNEL_HOP_ERROR)
+	if (channel_switch(CHANNEL_OFFSET) == CHANNEL_SWITCH_ERROR)
 		return CHANNEL_SCAN_ERROR;
 
 	// return the optimal channel
@@ -85,8 +85,8 @@ int
 channel_switch(int channel)
 {
 	if (NETSTACK_RADIO.set_value(RADIO_PARAM_CHANNEL, channel) != RADIO_RESULT_OK)
-		return CHANNEL_HOP_ERROR;
+		return CHANNEL_SWITCH_ERROR;
 
-	return CHANNEL_HOP_OK;
+	return CHANNEL_SWITCH_OK;
 }
 
