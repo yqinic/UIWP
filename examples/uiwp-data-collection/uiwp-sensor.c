@@ -73,7 +73,7 @@ recv_uc(struct unicast_conn *c, const linkaddr_t *from)
         PRINTF("bunicast send to sink, channel: %d\n", uiwprequestlist.channel);
 
         // char *buf = "hello world\n";
-        bunicast_size(&buc, 16);
+        bunicast_size(&buc, 1);
         bunicast_send(&buc, from, buf);
 
         // cannot channel switch here
