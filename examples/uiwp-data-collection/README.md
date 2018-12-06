@@ -55,7 +55,7 @@ Sensor nodes can be delopyed anywhere safe. Make sure to note the GPS coordinate
 
 ## Built With
 
-* [TI CC2650 SoC](http://github.com/contiki-os/contiki/tree/master/platforms/srf06-cc26xx) TI CC2650 Launchpad & TI CC2650 SensorTag
+* [TI CC2650 SoC](https://github.com/contiki-os/contiki/tree/master/platform/srf06-cc26xx) -- TI CC2650 Launchpad & TI CC2650 SensorTag
 
 ## Authors
 
