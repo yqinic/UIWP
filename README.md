@@ -2,6 +2,8 @@
 
 This is an UAV integrated WSN protocol data collection example described in paper "UIWP IoT paper (to be changed)". This example contains the code for both the mobile sink and sensor nodes, and illustrate how the mobile sink collects sensing data from sensor nodes.
 
+The manuscript paper for the protocol can be viewed [here](https://github.com/yqinic/yqinic.github.io/blob/master/Efficient_and_Reliable_Aerial_Communication_with_Wireless_Sensors.pdf).
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See following descriptions on how to run the code on your nodes.
