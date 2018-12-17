@@ -4,7 +4,7 @@ This is an UAV integrated WSN protocol data collection example described in pape
 
 The manuscript paper for the protocol can be viewed [here](https://github.com/yqinic/yqinic.github.io/blob/master/Efficient_and_Reliable_Aerial_Communication_with_Wireless_Sensors.pdf).
 
-The experiment results for the paper can be viewed [here](https://github.com/yqinic/yqinic.github.io/tree/master/examples/uiwp-data-collection/experiment_results).
+The experiment data discussed in the paper can be viewed [here](https://github.com/yqinic/yqinic.github.io/tree/master/examples/uiwp-data-collection/experiment_results).
 
 ## Getting Started
 
